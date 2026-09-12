@@ -35,9 +35,6 @@ namespace EQTool.UI
         public string Name { get; set; }
         public List<FrameworkElement> ChildrenInRow { get; set; }
         public RowDefinition RowDefinition { get; set; }
-        public Storyboard Storyboard { get; set; }
-        public ProgressBar ProgressBar { get; set; }
-        public TextBlock RemainingText { get; set; }
         public System.Windows.Threading.DispatcherTimer TextTimer { get; set; }
     }
 
@@ -257,10 +254,50 @@ namespace EQTool.UI
             return luminance > 0.179 ? Brushes.Black : Brushes.White;
         }
 
+        // The countdown number sits over both the bar's fill and its near-black drained portion as
+        // the bar empties, so it needs contrast backing on every side, not just one. This was a
+        // DropShadowEffect with ShadowDepth 0 - a glow rather than a shadow - but effects are pixel
+        // shaders, among the likeliest features to fault under Wine/Proton's Direct3D9 translation.
+        // Four offset copies behind the text approximate the same halo using nothing but TextBlocks.
+        // Every layer is returned so whoever updates the countdown updates all of them together.
+        private static List<TextBlock> AddCountdownText(Grid host, string text, Brush fill, Brush outline, double fontSize)
+        {
+            var layers = new List<TextBlock>();
+            void AddLayer(Brush brush, double dx, double dy)
+            {
+                var layer = new TextBlock
+                {
+                    Text = text,
+                    Foreground = brush,
+                    FontSize = fontSize,
+                    FontWeight = FontWeights.Bold,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    // Left margin positions the text within the bar; the rest is the outline offset.
+                    // Bottom cancels Top, otherwise a vertically centered layer would not shift.
+                    Margin = new Thickness(10 + dx, dy, 0, -dy),
+                    IsHitTestVisible = false
+                };
+                _ = host.Children.Add(layer);
+                layers.Add(layer);
+            }
+            AddLayer(outline, -1, 0);
+            AddLayer(outline, 1, 0);
+            AddLayer(outline, 0, -1);
+            AddLayer(outline, 0, 1);
+            // added last so the real text draws over its outline
+            AddLayer(fill, 0, 0);
+            return layers;
+        }
+
         private void RemoveTimerBarRow(TimerBarData timerdata)
         {
+            // Removing the same row twice would run the row-shifting loops below a second time and
+            // pull every row underneath it up one too many.
+            if (!timerBarDatas.Remove(timerdata))
+            {
+                return;
+            }
             var rowremoved = Grid.GetRow(timerdata.ChildrenInRow.FirstOrDefault());
-            _ = timerBarDatas.Remove(timerdata);
             foreach (var item in timerdata.ChildrenInRow)
             {
                 ChainStackPanel.Children.Remove(item);
@@ -297,7 +334,6 @@ namespace EQTool.UI
                 var existing = timerBarDatas.FirstOrDefault(t => t.Name == e.Name);
                 if (existing != null)
                 {
-                    existing.Storyboard.Stop();
                     existing.TextTimer?.Stop();
                     RemoveTimerBarRow(existing);
                 }
@@ -329,46 +365,45 @@ namespace EQTool.UI
                 };
 
                 var barBrush = e.BarColor ?? Brushes.SteelBlue;
-                var progressBar = new ProgressBar
+
+                // A Border/Grid rather than a ProgressBar. The stock control template differs per
+                // Windows theme - the Aero one slides a glow rectangle across the bar continuously
+                // even when it is determinate - so both what it costs to draw and what it looks like
+                // depend on what Wine reports as the current theme. Two star-sized columns express
+                // how full the bar is without measuring anything, so it also follows the overlay
+                // being resized for free.
+                var fillColumn = new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) };
+                var drainedColumn = new ColumnDefinition { Width = new GridLength(0, GridUnitType.Star) };
+                var fillGrid = new Grid();
+                fillGrid.ColumnDefinitions.Add(fillColumn);
+                fillGrid.ColumnDefinitions.Add(drainedColumn);
+                var fill = new Border
                 {
-                    Minimum = 0,
-                    Maximum = 100,
-                    Value = 100,
+                    Background = barBrush,
+                    CornerRadius = new CornerRadius(2)
+                };
+                Grid.SetColumn(fill, 0);
+                _ = fillGrid.Children.Add(fill);
+
+                var trackBorder = new Border
+                {
                     Height = settings.FontSize.Value * 2,
-                    Foreground = barBrush,
+                    CornerRadius = new CornerRadius(3),
                     Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(200, 10, 10, 10)),
                     BorderThickness = new Thickness(1),
                     BorderBrush = Brushes.White,
-                    IsHitTestVisible = false
-                };
-                timerdata.ProgressBar = progressBar;
-
-                // Countdown text color is chosen to contrast the bar's fill color, with a thin glow
-                // of the opposite shade so it also stays readable over the near-black drained
-                // portion of the bar (the text sits over both regions as the bar empties).
-                var textBrush = ContrastingTextBrush(barBrush);
-                var remainingText = new TextBlock
-                {
-                    Text = e.TotalSeconds.ToString(),
-                    Foreground = textBrush,
-                    FontSize = settings.FontSize.Value * 2,
-                    FontWeight = FontWeights.Bold,
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Margin = new Thickness(10, 0, 0, 0),
                     IsHitTestVisible = false,
-                    Effect = new System.Windows.Media.Effects.DropShadowEffect
-                    {
-                        Color = textBrush == Brushes.Black ? Colors.White : Colors.Black,
-                        ShadowDepth = 0,
-                        BlurRadius = 3,
-                        Opacity = 0.9
-                    }
+                    Child = fillGrid
                 };
-                timerdata.RemainingText = remainingText;
+
+                // Text color contrasts the bar's fill; the outline behind it is the opposite shade,
+                // so the number stays readable over the drained part of the bar too.
+                var textBrush = ContrastingTextBrush(barBrush);
+                var outlineBrush = textBrush == Brushes.Black ? Brushes.White : Brushes.Black;
 
                 var barGrid = new Grid();
-                _ = barGrid.Children.Add(progressBar);
-                _ = barGrid.Children.Add(remainingText);
+                _ = barGrid.Children.Add(trackBorder);
+                var countdownLayers = AddCountdownText(barGrid, e.TotalSeconds.ToString(), textBrush, outlineBrush, settings.FontSize.Value * 2);
 
                 var getrow = ChainStackPanel.RowDefinitions.Count;
                 Grid.SetRow(nameBorder, getrow);
@@ -383,19 +418,12 @@ namespace EQTool.UI
                 timerdata.ChildrenInRow.Add(barGrid);
                 timerBarDatas.Add(timerdata);
 
-                var animation = new DoubleAnimation
-                {
-                    From = 100,
-                    To = 0,
-                    Duration = TimeSpan.FromSeconds(e.TotalSeconds)
-                };
-                Storyboard.SetTarget(animation, progressBar);
-                Storyboard.SetTargetProperty(animation, new PropertyPath(ProgressBar.ValueProperty));
-
-                var storyboard = new Storyboard();
-                storyboard.Children.Add(animation);
-                timerdata.Storyboard = storyboard;
-
+                // The bar's fill and countdown text are both driven off one plain DispatcherTimer tick
+                // instead of a WPF Storyboard/DoubleAnimation. A Storyboard re-renders every frame for
+                // the whole duration of every concurrent timer, which is heavy, continuous composition
+                // work - exactly the kind of thing that destabilizes under Wine/Proton's rendering
+                // translation on a raid with several timers running at once. A 200ms poll is imperceptible
+                // for a countdown bar and removes that whole animation-clock dependency.
                 var startTime = DateTime.UtcNow;
                 var totalSeconds = e.TotalSeconds;
                 var textTimer = new System.Windows.Threading.DispatcherTimer
@@ -406,20 +434,22 @@ namespace EQTool.UI
                 textTimer.Tick += (s, ev) =>
                 {
                     var remaining = totalSeconds - (DateTime.UtcNow - startTime).TotalSeconds;
-                    remainingText.Text = remaining > 0 ? Math.Ceiling(remaining).ToString() : "0";
+                    if (remaining <= 0)
+                    {
+                        textTimer.Stop();
+                        RemoveTimerBarRow(timerdata);
+                        return;
+                    }
+                    var remainingtext = Math.Ceiling(remaining).ToString();
+                    foreach (var layer in countdownLayers)
+                    {
+                        layer.Text = remainingtext;
+                    }
+                    var fraction = remaining / totalSeconds;
+                    fillColumn.Width = new GridLength(fraction, GridUnitType.Star);
+                    drainedColumn.Width = new GridLength(1 - fraction, GridUnitType.Star);
                 };
                 textTimer.Start();
-
-                storyboard.Completed += (s, ev) =>
-                {
-                    appDispatcher.DispatchUI(() =>
-                    {
-                        timerdata.TextTimer?.Stop();
-                        RemoveTimerBarRow(timerdata);
-                    });
-                };
-
-                storyboard.Begin();
             });
         }
 
@@ -530,6 +560,12 @@ namespace EQTool.UI
             foreach (var message in messageDatas)
             {
                 message.RemovalTimer?.Stop();
+            }
+            // These drive the timer bars and tear their rows back down, so one left running past
+            // the window's life keeps mutating a closed window - and keeps it alive to do it.
+            foreach (var timerbar in timerBarDatas)
+            {
+                timerbar.TextTimer?.Stop();
             }
 
             base.OnClosing(e);

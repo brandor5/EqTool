@@ -38,6 +38,16 @@ namespace EQTool
             // good. 25ms is the practical floor: the deadline is compared against Environment.TickCount,
             // which only advances every ~15.6ms, so smaller values just abort early and erratically.
             AppDomain.CurrentDomain.SetData("REGEX_DEFAULT_MATCH_TIMEOUT", TimeSpan.FromMilliseconds(25));
+#if LINUX
+            // WPF's default hardware rendering path goes through Direct3D9, which Wine/Proton only
+            // partially emulate. The always-on-top, transparent overlay window (animated CH-chain
+            // text, layered-window click-through) is exactly the kind of continuous GPU-composited
+            // workload most likely to trip a native rendering fault there, surfacing as random,
+            // uncatchable process crashes. Software rendering trades a small amount of CPU - trivial
+            // for an app this light - for eliminating that whole class of crash. Must be set before
+            // any window is created, so the static constructor is the earliest hook available.
+            System.Windows.Media.RenderOptions.ProcessRenderMode = System.Windows.Interop.RenderMode.SoftwareOnly;
+#endif
         }
 
         private Autofac.IContainer container;
