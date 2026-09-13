@@ -19,7 +19,7 @@ jobs:
         uses: nuget/setup-nuget@v2
 
       - name: Restore NuGet packages
-        run: nuget restore EQTool/EQTool.csproj
+        run: nuget restore EqTool.sln
 
       - name: Build EQTool (Linux configuration)
         run: msbuild EQTool/EQTool.csproj /p:Configuration=Linux /p:Platform=AnyCPU /t:Rebuild /m
