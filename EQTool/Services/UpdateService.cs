@@ -104,8 +104,18 @@ namespace EQTool.Services
             return UpdateStatus.NoUpdateApplied;
         }
 
+        // Local patched build: the real update check pulls the latest release from the upstream
+        // smasherprog/EqTool repo and overwrites this install with it (see the real overload
+        // below), which would silently undo any local-only fixes on the next restart. Flip this
+        // back to false to restore normal auto-update behavior once local patches are upstreamed.
+        private const bool UpdateCheckDisabled = true;
+
         public static void CheckForUpdates(string currentversion1, string versiontype, Autofac.IContainer container, bool firstRun)
         {
+            if (UpdateCheckDisabled)
+            {
+                return;
+            }
             _ = Task.Factory.StartNew(() =>
             {
                 IAppDispatcher appDispatcher = null;
