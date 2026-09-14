@@ -1,4 +1,5 @@
 ﻿using EQToolShared.Enums;
+using System;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
@@ -7,11 +8,11 @@ namespace EQTool.Services
 {
     public class LoggingService
     {
-        private readonly HttpClient httpclient = new HttpClient();
+        private readonly HttpClient httpclient = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
 
         public void Log(string message, EventType eventType, Servers? server)
         {
-            Task.Factory.StartNew(() =>
+            _ = Task.Run(async () =>
             {
                 var build = BuildType.Release;
 #if TEST
@@ -33,7 +34,7 @@ namespace EQTool.Services
                     };
                     var msagasjson = Newtonsoft.Json.JsonConvert.SerializeObject(msg);
                     var content = new StringContent(msagasjson, Encoding.UTF8, "application/json");
-                    var result = httpclient.PostAsync("https://pigparse.azurewebsites.net/api/eqtool/exception", content).Result;
+                    var result = await httpclient.PostAsync("https://pigparse.azurewebsites.net/api/eqtool/exception", content).ConfigureAwait(false);
                 }
                 catch { }
             });

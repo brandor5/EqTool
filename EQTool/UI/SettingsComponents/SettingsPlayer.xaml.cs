@@ -77,7 +77,7 @@ namespace EQTool.UI.SettingsComponents
     public partial class SettingsPlayer : UserControl
     {
         private const string PigparseBase = "https://pigparse.azurewebsites.net";
-        private static readonly HttpClient httpClient = new HttpClient();
+        private static readonly HttpClient httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
 
         private static readonly Brush PanelBg = MakeBrush("#FF131829");
         private static readonly Brush PanelBorder = MakeBrush("#FF242C49");

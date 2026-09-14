@@ -26,7 +26,9 @@ namespace EQTool.Services
         private const int SettleMilliseconds = 1500;
 
         private readonly EQToolSettings _settings;
-        private readonly HttpClient _httpClient = new HttpClient();
+        // Send() blocks on .Result, so without a timeout a stalled server holds the calling
+        // thread for HttpClient's 100s default. UI file sync is small JSON either way.
+        private readonly HttpClient _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
         // file name (lower-cased) -> hash of the contents we last synced.
         private readonly ConcurrentDictionary<string, string> _syncedHash = new ConcurrentDictionary<string, string>();
         // Uploads run one at a time so the hash guard is read and recorded without

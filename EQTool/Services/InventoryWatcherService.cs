@@ -17,7 +17,10 @@ namespace EQTool.Services
     {
         private readonly EQToolSettings _settings;
         private readonly ActivePlayer _activePlayer;
-        private readonly HttpClient _httpClient = new HttpClient();
+        // PostInventory blocks on .Result from a fire-and-forget task per watcher event, so
+        // without a timeout a stalled server leaves one thread parked per inventory write for
+        // HttpClient's 100s default - and file watcher events arrive in bursts.
+        private readonly HttpClient _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
         private FileSystemWatcher _watcher;
 
         public InventoryWatcherService(EQToolSettings settings, ActivePlayer activePlayer)
@@ -142,9 +145,16 @@ namespace EQTool.Services
             try
             {
                 var json = JsonConvert.SerializeObject(request);
-                var content = new StringContent(json, Encoding.UTF8, "application/json");
-                _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiToken);
-                _ = _httpClient.PostAsync("https://pigparse.azurewebsites.net/api/inventory/upload", content).Result;
+                // The token goes on the request rather than on _httpClient.DefaultRequestHeaders.
+                // Watcher events arrive in bursts and each one posts from its own task, so several
+                // of these can be in flight at once; mutating the shared client's default headers
+                // races with whatever request another thread is building off them.
+                var message = new HttpRequestMessage(HttpMethod.Post, "https://pigparse.azurewebsites.net/api/inventory/upload")
+                {
+                    Content = new StringContent(json, Encoding.UTF8, "application/json")
+                };
+                message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiToken);
+                _ = _httpClient.SendAsync(message).Result;
             }
             catch { }
         }

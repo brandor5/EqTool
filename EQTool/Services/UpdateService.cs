@@ -17,6 +17,13 @@ namespace EQTool.Services
 {
     public class UpdateService
     {
+        // App.httpclient caps every request at 10s, which suits the small telemetry and API calls
+        // it is shared for but is far too short to pull down a multi-megabyte release zip -
+        // HttpClient.Timeout covers the whole request including reading the body, so a large
+        // download would abort partway rather than merely being slow. The download gets its own
+        // client so the two can have sensible timeouts independently.
+        private static readonly System.Net.Http.HttpClient downloadclient = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMinutes(10) };
+
         private static void _CopyFilesRecursively(string sourcePath, string targetPath)
         {
             foreach (var file in Directory.GetFiles(sourcePath))
@@ -170,7 +177,7 @@ namespace EQTool.Services
                     {
                         System.IO.Directory.Delete(newVersionDir, true);
                     }
-                    var fileBytes = App.httpclient.GetByteArrayAsync(downloadurl).Result;
+                    var fileBytes = downloadclient.GetByteArrayAsync(downloadurl).Result;
                     var filename = Path.GetFileName(downloadurl);
                     if (filename.EndsWith(".zip"))
                     {

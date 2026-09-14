@@ -27,7 +27,7 @@ namespace EQTool
 {
     public partial class App : Application
     {
-        public static HttpClient httpclient = new HttpClient();
+        public static HttpClient httpclient = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
 
         static App()
         {
@@ -131,7 +131,7 @@ namespace EQTool
 
         public static void LogUnhandledException(Exception exception, string source, Servers? server)
         {
-            Task.Factory.StartNew(() =>
+            _ = Task.Run(async () =>
             {
                 var build = BuildType.Release;
 #if TEST
@@ -161,7 +161,7 @@ namespace EQTool
                     }
                     var msagasjson = Newtonsoft.Json.JsonConvert.SerializeObject(msg);
                     var content = new StringContent(msagasjson, Encoding.UTF8, "application/json");
-                    var result = httpclient.PostAsync("https://pigparse.azurewebsites.net/api/eqtool/exception", content).Result;
+                    var result = await httpclient.PostAsync("https://pigparse.azurewebsites.net/api/eqtool/exception", content).ConfigureAwait(false);
                 }
                 catch { }
             });

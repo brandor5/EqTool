@@ -79,6 +79,23 @@ namespace EQTool.Services
 
         private void UITimer_Elapsed(object sender, System.Timers.ElapsedEventArgs e)
         {
+            // AutoReset means the next tick fires 20s later regardless of whether this one has
+            // finished its blocking pigParseApi calls. If those calls stall (slow/unreachable
+            // server), ticks pile up on the ThreadPool and each one blocks on the same HTTP
+            // client, so stop the timer for the duration of this tick and restart it when done.
+            UITimer.Stop();
+            try
+            {
+                UITimer_Elapsed_Impl();
+            }
+            finally
+            {
+                UITimer.Start();
+            }
+        }
+
+        private void UITimer_Elapsed_Impl()
+        {
             var playerstosync = new List<EQToolShared.APIModels.PlayerControllerModels.Player>();
             if (activePlayer.Player?.Server == null)
             {
