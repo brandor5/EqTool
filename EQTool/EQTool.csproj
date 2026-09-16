@@ -140,7 +140,11 @@
     <PlatformTarget>AnyCPU</PlatformTarget>
     <LangVersion>7.3</LangVersion>
     <ErrorReport>prompt</ErrorReport>
-    <Prefer32Bit>true</Prefer32Bit>
+    <!-- Prefer32Bit would run this as a 32-bit process despite AnyCPU, capping it at roughly
+         2GB of address space. Under Wine that ceiling is reached in well under an hour: a
+         233KB mmap failed and the Mono runtime aborted the process. 64-bit removes the
+         ceiling. The Windows configurations keep Prefer32Bit as they were. -->
+    <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Linux|x86'">
     <OutputPath>bin\x86\Linux\</OutputPath>
