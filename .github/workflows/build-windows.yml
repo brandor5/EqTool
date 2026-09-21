@@ -21,6 +21,17 @@ jobs:
       - name: Restore NuGet packages
         run: nuget restore EqTool.sln
 
+      # Stamps the commit onto the assembly so a running instance can say which build it is -
+      # the tray menu reads it back through App.BuildId. Appending the attribute to the existing
+      # AssemblyInfo.cs avoids touching the csproj, which lists its compile items explicitly.
+      - name: Stamp commit id into AssemblyInfo
+        shell: pwsh
+        run: |
+          $sha = "${{ github.sha }}".Substring(0, 8)
+          Add-Content -Path EQTool/Properties/AssemblyInfo.cs -Value ""
+          Add-Content -Path EQTool/Properties/AssemblyInfo.cs -Value "[assembly: System.Reflection.AssemblyInformationalVersion(`"$sha`")]"
+          Write-Host "Stamped build id: $sha"
+
       - name: Build EQTool (Linux configuration)
         run: msbuild EQTool/EQTool.csproj /p:Configuration=Linux /p:Platform=AnyCPU /t:Rebuild /m
 

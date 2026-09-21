@@ -306,7 +306,7 @@ namespace EQTool
                 string.IsNullOrEmpty(EQToolSettings.DiscordUsername) ? "Login with Discord" : $"Discord: {EQToolSettings.DiscordUsername}",
                 ToggleDiscordLogin);
 
-            var version = new System.Windows.Forms.MenuItem(Version)
+            var version = new System.Windows.Forms.MenuItem($"{Version} ({BuildId})")
             {
                 Enabled = false
             };
@@ -465,6 +465,33 @@ namespace EQTool
                 var v = VersionType + Assembly.GetExecutingAssembly().GetName().Version.ToString();
                 _Version = v;
                 return _Version;
+            }
+        }
+
+        private static string _BuildId;
+
+        // The commit this build came from, so a running instance can be identified without
+        // guessing. CI stamps AssemblyInformationalVersion with the short SHA; a local build
+        // leaves the attribute absent and reports "local" instead. Deliberately separate from
+        // Version, which UpdateService compares against GitHub release tags and which the
+        // exception reports carry - that string's format is load-bearing, this one is not.
+        public static string BuildId
+        {
+            get
+            {
+                if (!string.IsNullOrWhiteSpace(_BuildId))
+                {
+                    return _BuildId;
+                }
+                string informational = null;
+                try
+                {
+                    informational = Assembly.GetExecutingAssembly()
+                        .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+                }
+                catch { }
+                _BuildId = string.IsNullOrWhiteSpace(informational) ? "local" : informational.Trim();
+                return _BuildId;
             }
         }
 
