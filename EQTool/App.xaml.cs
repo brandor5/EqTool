@@ -436,6 +436,11 @@ namespace EQTool
             _ = container.Resolve<UpdateRunner>();
             container.Resolve<InventoryWatcherService>().Start();
             container.Resolve<UIFileSyncService>().Start();
+#if LINUX
+            // Temporary: samples every collection that could grow without bound, next to RSS,
+            // into leak-diagnostics.csv beside the executable. Remove once the leak is found.
+            container.Resolve<LeakDiagnostics>().Start();
+#endif
 
             App.Current.Resources["GlobalFontSize"] = (double)(EQToolSettings?.FontSize ?? 12);
             ((App)System.Windows.Application.Current).UpdateBackgroundOpacity("MyWindowStyleDPS", EQToolSettings.DpsWindowState.Opacity.Value);
