@@ -40,13 +40,23 @@ namespace EQTool
             AppDomain.CurrentDomain.SetData("REGEX_DEFAULT_MATCH_TIMEOUT", TimeSpan.FromMilliseconds(25));
 #if LINUX
             // WPF's default hardware rendering path goes through Direct3D9, which Wine/Proton only
-            // partially emulate. The always-on-top, transparent overlay window (animated CH-chain
-            // text, layered-window click-through) is exactly the kind of continuous GPU-composited
-            // workload most likely to trip a native rendering fault there, surfacing as random,
-            // uncatchable process crashes. Software rendering trades a small amount of CPU - trivial
-            // for an app this light - for eliminating that whole class of crash. Must be set before
+            // partially emulate, so this forces the software renderer instead. Must be set before
             // any window is created, so the static constructor is the earliest hook available.
-            System.Windows.Media.RenderOptions.ProcessRenderMode = System.Windows.Interop.RenderMode.SoftwareOnly;
+            //
+            // Treat this as under suspicion. It was added to stop "random, uncatchable crashes"
+            // blamed on D3D9, but those turned out to be two other things - 32-bit address space
+            // exhaustion and a lock inversion against the UI thread - both since fixed directly.
+            // Meanwhile an idle process leaks ~42 MB/min whenever any window is on screen and
+            // nothing at all when they are all closed, and 42 MB/min is about one full-window
+            // 32bpp backbuffer per second. A software renderer that never frees its buffer fits
+            // that exactly, and the hardware path would not allocate it on the managed heap.
+            //
+            // Set EQTOOL_SOFTWARE_RENDER=0 to run the hardware path and compare. Default is
+            // unchanged, so this only opens a door; it does not walk through it.
+            if (Environment.GetEnvironmentVariable("EQTOOL_SOFTWARE_RENDER") != "0")
+            {
+                System.Windows.Media.RenderOptions.ProcessRenderMode = System.Windows.Interop.RenderMode.SoftwareOnly;
+            }
 #endif
         }
 
