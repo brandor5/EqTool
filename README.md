@@ -1,3 +1,8 @@
+> **This is a fork.** It makes PigParse run properly on Linux under Wine, and
+> fixes a few bugs that are not Linux-specific. See **[FORK.md](FORK.md)** for
+> what differs from [upstream](https://github.com/smasherprog/EqTool) and why.
+> Everything below is upstream's README, unchanged.
+
 # PigParse
 <img width="1892" alt="image" src="https://github.com/smasherprog/EqTool/blob/main/Example.png?raw=true">
 
