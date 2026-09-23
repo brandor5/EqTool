@@ -39,20 +39,26 @@ namespace EQTool
             // which only advances every ~15.6ms, so smaller values just abort early and erratically.
             AppDomain.CurrentDomain.SetData("REGEX_DEFAULT_MATCH_TIMEOUT", TimeSpan.FromMilliseconds(25));
 #if LINUX
-            // WPF's default hardware rendering path goes through Direct3D9, which Wine/Proton only
-            // partially emulate, so this forces the software renderer instead. Must be set before
-            // any window is created, so the static constructor is the earliest hook available.
+            // WPF's hardware rendering path goes through Direct3D9, which fails pixel format
+            // negotiation under Wine - err:d3d:context_choose_pixel_format - and every window
+            // then renders black. Forcing the software renderer is what makes this run at all.
+            // Must be set before any window is created, so the static constructor is the
+            // earliest hook available.
             //
-            // Treat this as under suspicion. It was added to stop "random, uncatchable crashes"
-            // blamed on D3D9, but those turned out to be two other things - 32-bit address space
-            // exhaustion and a lock inversion against the UI thread - both since fixed directly.
-            // Meanwhile an idle process leaks ~42 MB/min whenever any window is on screen and
-            // nothing at all when they are all closed, and 42 MB/min is about one full-window
-            // 32bpp backbuffer per second. A software renderer that never frees its buffer fits
-            // that exactly, and the hardware path would not allocate it on the managed heap.
+            // Demonstrated rather than assumed: an unmodified upstream build, which has no
+            // LINUX define and so never sets this, renders black on the same prefix until
+            // WPF's own registry switch is set instead:
+            //   HKCU\Software\Microsoft\Avalon.Graphics\DisableHWAcceleration = 1 (DWORD)
+            // That switch covers any WPF application in the prefix and the Ansible role sets
+            // it, so on a machine built by that role this line is redundant - but it keeps the
+            // build working in a prefix nobody has configured.
             //
-            // Set EQTOOL_SOFTWARE_RENDER=0 to run the hardware path and compare. Default is
-            // unchanged, so this only opens a door; it does not walk through it.
+            // It is not responsible for the memory growth seen under Proton, despite fitting
+            // the arithmetic almost exactly. That was wine-mono's WPF leaking natively at
+            // ~50 MB/min, and it disappears on real .NET Framework 4.8 with this still on.
+            //
+            // Set EQTOOL_SOFTWARE_RENDER=0 to run the hardware path, which is only useful for
+            // reproducing the black windows.
             if (Environment.GetEnvironmentVariable("EQTOOL_SOFTWARE_RENDER") != "0")
             {
                 System.Windows.Media.RenderOptions.ProcessRenderMode = System.Windows.Interop.RenderMode.SoftwareOnly;
@@ -436,11 +442,6 @@ namespace EQTool
             _ = container.Resolve<UpdateRunner>();
             container.Resolve<InventoryWatcherService>().Start();
             container.Resolve<UIFileSyncService>().Start();
-#if LINUX
-            // Temporary: samples every collection that could grow without bound, next to RSS,
-            // into leak-diagnostics.csv beside the executable. Remove once the leak is found.
-            container.Resolve<LeakDiagnostics>().Start();
-#endif
 
             App.Current.Resources["GlobalFontSize"] = (double)(EQToolSettings?.FontSize ?? 12);
             ((App)System.Windows.Application.Current).UpdateBackgroundOpacity("MyWindowStyleDPS", EQToolSettings.DpsWindowState.Opacity.Value);

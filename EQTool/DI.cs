@@ -80,9 +80,6 @@ namespace EQTool
             _ = builder.RegisterType<Services.IO.FileReader>().As<Services.IO.IFileReader>().SingleInstance();
             _ = builder.RegisterType<InventoryWatcherService>().AsSelf().SingleInstance();
             _ = builder.RegisterType<UIFileSyncService>().AsSelf().SingleInstance();
-#if LINUX
-            _ = builder.RegisterType<Services.LeakDiagnostics>().AsSelf().SingleInstance();
-#endif
 
             _ = builder.RegisterType<Pets>().AsSelf().SingleInstance();
 
